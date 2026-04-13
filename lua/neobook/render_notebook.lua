@@ -14,19 +14,17 @@ local function notecell_to_display_lines (notecell)
 	
 	local is_code_cell = notecell.cell_type == 'code'
 
-	local delimiter = get_delimiters.get_delimiter (is_code_cell)
-
 	local ret = {}
 	
-	-- table.insert (ret, delimiter)
+	local exec_count = 0
 
 	if is_code_cell then
-		local exec_count = notecell.execution_count and tostring (notecell.execution_count) or ''
-
-		table.insert (ret, get_delimiters.get_code_cell_upper_delimiter (exec_count))
-	else
-		table.insert (ret, delimiter)
+		exec_count = (notecell.execution_count and notecell.execution_count ~= vim.NIL) and tostring (notecell.execution_count) or ''
 	end
+
+	local delimiters = get_delimiters.get_delimiters (is_code_cell, exec_count)
+
+	table.insert (ret, delimiters.upper)
 
 	if notecell.source then
 		for _, line in ipairs (notecell.source) do
@@ -55,7 +53,7 @@ local function notecell_to_display_lines (notecell)
 
 	end
 
-	table.insert (ret, delimiter)
+	table.insert (ret, delimiters.lower)
 
 	return ret
 
@@ -70,6 +68,8 @@ local function render_notebook ()
 		-- print ('Error: Current buffer is not a valid Jupyter Notebook')
 		return
 	end
+
+	vim.b.notebook_data = parsed
 
 	local display_lines = {}
 

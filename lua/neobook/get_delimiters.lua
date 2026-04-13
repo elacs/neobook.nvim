@@ -10,23 +10,28 @@ local function get_pane_width ()
 	return vim.api.nvim_win_get_width (0) - 5
 end
 
-local function get_delimiter (is_code_cell)
-	if is_code_cell then
-		return string.rep (code_delimiter_symbol, get_pane_width ())
-	else
-		return string.rep (md_delimiter_symbol, get_pane_width ())
-	end
-end
-
 local function get_code_cell_upper_delimiter (exec_count)
-	local prefix = '[ ' .. exec_count .. ' ]'
+	local prefix = '[' .. exec_count .. ']'
 	local suffix = string.rep (code_delimiter_symbol, get_pane_width () - #prefix)
 
 	return prefix .. suffix
 end
 
+local function get_delimiters (is_code_cell, exec_count)
+	local ret = {}
 
-M.get_delimiter = get_delimiter
-M.get_code_cell_upper_delimiter = get_code_cell_upper_delimiter
+	if is_code_cell then
+		ret.upper = get_code_cell_upper_delimiter (exec_count)
+		ret.lower = string.rep (code_delimiter_symbol, get_pane_width ())
+	else
+		ret.upper = string.rep (md_delimiter_symbol, get_pane_width ())
+		ret.lower = string.rep (md_delimiter_symbol, get_pane_width ())
+	end
+
+	return ret
+end
+
+
+M.get_delimiters = get_delimiters
 
 return M

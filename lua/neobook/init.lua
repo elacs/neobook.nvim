@@ -17,6 +17,13 @@ local function setup (opts)
 		end,
 	})
 
+	-- vim.api.nvim_create_autocmd ('BufWriteCmd', {
+	-- 	pattern = '*.ipynb',
+	-- 	callback = function (args)
+	-- 		save_notebook.save_notebook (args.file)
+	-- 	end,
+	-- })
+
 end
 
 
