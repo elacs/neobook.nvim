@@ -10,7 +10,7 @@ local function concat_tables (a, b)
 	end
 end
 
-local function notecell_to_display_lines (notecell)
+local function notecell_to_displaycell (notecell)
 	
 	local is_code_cell = notecell.cell_type == 'code'
 
@@ -60,6 +60,8 @@ local function notecell_to_display_lines (notecell)
 end
 
 local function render_notebook ()
+	local ns_id = vim.api.nvim_create_namespace ('neobook_cells')
+
 	local lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
 	local content = table.concat (lines, '\n')
 
@@ -69,12 +71,13 @@ local function render_notebook ()
 		return
 	end
 
-	vim.b.notebook_data = parsed
+	vim.b.notebook_json = parsed
+	vim.b.extmark_dict = {}
 
 	local display_lines = {}
 
 	for _, cell in ipairs (parsed.cells) do
-		concat_tables (display_lines, notecell_to_display_lines (cell))
+		concat_tables (display_lines, notecell_to_displaycell (cell))
 	end
 
 	vim.api.nvim_buf_set_lines (0, 0, -1, false, display_lines)

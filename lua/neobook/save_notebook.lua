@@ -1,5 +1,21 @@
 local M = {}
 
+-- 1. split display lines into displaycells (split on delimiters)
+-- 2. match displaycell ids to notecell ids
+-- 3. save displaycell to notecell
+
+local function get_displaycells_from_displaylines (display_lines)
+	-- 1. get delimiter format for both code and md cells
+	-- 2. iterate through display_lines to match upper delimiter for either code or md cells
+	-- 3. return cell_type, cell contents, exec_count, cell_id
+
+end
+
+local function displaycell_to_notecell (displaycell)
+end
+
+
+
 local function save_current_cell (data, cell_idx, current_source)
 	if cell_idx > 0 and data.cells[cell_idx] then
 		if #current_source > 0 and current_source[#current_source] == '' then
@@ -16,14 +32,14 @@ local function save_current_cell (data, cell_idx, current_source)
 end
 
 local function save_notebook (filepath)
-	local data = vim.b.notebook_data
+	local notebook_json = vim.b.notebook_json
 
-	if not data or not data.cells then
+	if not notebook_json or not notebook_json.cells then
 		print ('Error: no original notebook data found in memory')
 		return
 	end
 	
-	local lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
+	local display_lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
 
 	local cell_idx = 0
 	local state = 'idle' -- 'idle', 'source', 'output'

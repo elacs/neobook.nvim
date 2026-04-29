@@ -1,0 +1,85 @@
+local M = {}
+
+-- 1. split display lines into displaycells (split on delimiters)
+-- 2. match displaycell ids to notecell ids
+-- 3. save displaycell to notecell
+
+local function save_current_cell (data, cell_idx, current_source)
+	if cell_idx > 0 and data.cells[cell_idx] then
+		if #current_source > 0 and current_source[#current_source] == '' then
+			table.remove (current_source)
+		end
+
+		for i = 1, #current_source - 1 do
+			current_source[i] = current_source .. '\n'
+		end
+
+		data.cells[cell_idx].source = current_source
+	end
+
+end
+
+local function save_notebook (filepath)
+	local data = vim.b.notebook_data
+
+	if not data or not data.cells then
+		print ('Error: no original notebook data found in memory')
+		return
+	end
+	
+	local lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
+
+	local cell_idx = 0
+	local state = 'idle' -- 'idle', 'source', 'output'
+	local current_source = {}
+
+	for _, line in ipairs (lines) do
+		if line:match ('^%[ Markdown Cell %]$') or line:match ('^%[ Code Cell:') then
+			save_current_cell (data, cell_idx, current_source)
+			
+			cell_idx = cell_idx + 1
+			state = 'source'
+			current_source = {}
+
+		elseif line == '---Output---' then
+			save_current_cell (data, cell_idx, current_source)
+			state = 'output'
+
+		elseif line:match ('^%+%+%+%+%+%+%+') then
+			-- skip
+		else
+			if state == 'source' then
+				if current_source == 0 and line == '' then
+					--skip
+				else
+					table.insert (current_source, line)
+				end
+
+			elseif state == 'output' then
+				-- skip
+			end
+		end
+	end
+
+	save_current_cell (data, cell_idx, current_source)
+
+	local updated_json = vim.fn.json_encode (data)
+	local file = io.open (filepath, 'w')
+
+	if file then
+		file:write (updated_json)
+		file:close ()
+
+		vim.api.nvim_set_option_value ('modified', false, { buf = 0 })
+		print ('notebook saved successfully')
+		
+	else
+		print ('error: could not save notebook to ' .. filepath)
+	end
+
+end
+
+
+M.save_notebook = save_notebook
+
+return M
