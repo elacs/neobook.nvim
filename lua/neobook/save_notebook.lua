@@ -1,92 +1,59 @@
+-- imports
+local get_delimiters = require ('neobook.get_delimiters')
+
+
 local M = {}
 
--- 1. split display lines into displaycells (split on delimiters)
--- 2. match displaycell ids to notecell ids
--- 3. save displaycell to notecell
-
-local function get_displaycells_from_displaylines (display_lines)
-	-- 1. get delimiter format for both code and md cells
-	-- 2. iterate through display_lines to match upper delimiter for either code or md cells
-	-- 3. return cell_type, cell contents, exec_count, cell_id
-
-end
-
-local function displaycell_to_notecell (displaycell)
-end
-
-
-
-local function save_current_cell (data, cell_idx, current_source)
-	if cell_idx > 0 and data.cells[cell_idx] then
-		if #current_source > 0 and current_source[#current_source] == '' then
-			table.remove (current_source)
-		end
-
-		for i = 1, #current_source - 1 do
-			current_source[i] = current_source .. '\n'
-		end
-
-		data.cells[cell_idx].source = current_source
-	end
-
-end
+local ns_id = vim.api.nvim_create_namespace ('neobook_cells')
 
 local function save_notebook (filepath)
+
 	local notebook_json = vim.b.notebook_json
+	local extmark_dict = vim.b.extmark_dict
 
-	if not notebook_json or not notebook_json.cells then
-		print ('Error: no original notebook data found in memory')
-		return
-	end
-	
-	local display_lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
+	if not notebook_json or not extmark_dict then return end
 
-	local cell_idx = 0
-	local state = 'idle' -- 'idle', 'source', 'output'
-	local current_source = {}
+	local lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
 
-	for _, line in ipairs (lines) do
-		if line:match ('^%[ Markdown Cell %]$') or line:match ('^%[ Code Cell:') then
-			save_current_cell (data, cell_idx, current_source)
-			
-			cell_idx = cell_idx + 1
-			state = 'source'
-			current_source = {}
+	local extmarks = vim.api.nvim_buf_get_extmarks (0, ns_id, 0, -1, {})
 
-		elseif line == '---Output---' then
-			save_current_cell (data, cell_idx, current_source)
-			state = 'output'
+	for i, mark_info in ipairs (extmarks) do
+		local mark_id = mark_info[1]
+		local start_row = mark_info[2]
 
-		elseif line:match ('^%+%+%+%+%+%+%+') then
-			-- skip
-		else
-			if state == 'source' then
-				if current_source == 0 and line == '' then
-					--skip
-				else
-					table.insert (current_source, line)
-				end
+		local end_row = #lines
+		if extmarks[i + 1] then
+			end_row = extmarks[i + 1][2]
+		end
 
-			elseif state == 'output' then
-				-- skip
+		local cell_id = extmark_dict[mark_id]
+
+		local raw_cell_text = {}
+		for row = start_row + 2, end_row - 1 do
+			local line = lines[row]
+
+			if line == get_delimiters.output_delimiter then break end
+
+			table.insert (raw_cell_text, line .. '\n')
+		end
+
+		for _, cell in ipairs (notebook_json.cells) do
+			if cell.id == cell_id then
+				cell.source = raw_cell_text
+				break
 			end
 		end
+
 	end
 
-	save_current_cell (data, cell_idx, current_source)
+	local updated_json = vim.fn.json_encode (notebook_json)
 
-	local updated_json = vim.fn.json_encode (data)
 	local file = io.open (filepath, 'w')
 
 	if file then
 		file:write (updated_json)
 		file:close ()
-
 		vim.api.nvim_set_option_value ('modified', false, { buf = 0 })
-		print ('notebook saved successfully')
-		
-	else
-		print ('error: could not save notebook to ' .. filepath)
 	end
 
 end

@@ -33,5 +33,6 @@ end
 
 
 M.get_delimiters = get_delimiters
+M.output_delimiter = string.rep (output_delimiter_symbol, 3) .. 'OUTPUT' .. string.rep (output_delimiter_symbol, 3)
 
 return M

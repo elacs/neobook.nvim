@@ -4,6 +4,8 @@ local get_delimiters = require ('neobook.get_delimiters')
 
 local M = {}
 
+local ns_id = vim.api.nvim_create_namespace ('neobook_cells')
+
 local function concat_tables (a, b)
 	for i = 1, #b do
 		a[#a + 1] = b[i]
@@ -33,8 +35,8 @@ local function notecell_to_displaycell (notecell)
 	end
 
 	if notecell.outputs and #notecell.outputs > 0 then
-		table.insert (ret, '')
-		table.insert (ret, '--- OUTPUT ---')
+		-- table.insert (ret, '')
+		table.insert (ret, get_delimiters.output_delimiter)
 		
 		for _, output in ipairs (notecell.outputs) do
 			if output.data and output.data['text/plain'] then
@@ -59,7 +61,8 @@ local function notecell_to_displaycell (notecell)
 
 end
 
-local function render_notebook ()
+local function render_notebook ()	
+
 	local lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
 	local content = table.concat (lines, '\n')
 
@@ -70,14 +73,34 @@ local function render_notebook ()
 	end
 
 	vim.b.notebook_json = parsed
+	local extmark_dict = {}
 
-	local display_lines = {}
+	-- local display_lines = {}
+	vim.api.nvim_buf_set_lines (0, 0, -1, false, {})
 
 	for _, cell in ipairs (parsed.cells) do
-		concat_tables (display_lines, notecell_to_displaycell (cell))
+
+		local displaycell = notecell_to_displaycell (cell)
+
+		-- concat_tables (display_lines, displaycell)
+
+		local start_line = vim.api.nvim_buf_line_count (0)
+		
+		if start_line == 1 and vim.api.nvim_buf_get_lines (0, 0, 1, false) [1] == '' then
+			start_line = 0
+		end
+
+		vim.api.nvim_buf_set_lines (0, start_line, -1, false, displaycell)
+
+		local mark_id = vim.api.nvim_buf_set_extmark (0, ns_id, start_line, 0, {})
+
+		extmark_dict[mark_id] = cell.id
+
 	end
 
-	vim.api.nvim_buf_set_lines (0, 0, -1, false, display_lines)
+	vim.b.extmark_dict = extmark_dict
+
+	-- vim.api.nvim_buf_set_lines (0, 0, -1, false, display_lines)
 
 	vim.api.nvim_set_option_value ('filetype', 'python', { buf = 0 })
 
