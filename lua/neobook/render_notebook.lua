@@ -1,12 +1,12 @@
 -- imports
-local get_delimiters = require ('neobook.get_delimiters')
+local handle_delimiters = require ('neobook.handle_delimiters')
 
 local image = require ('image')
 
 
 local M = {}
 
-local ns_id = vim.api.nvim_create_namespace ('neobook_cells')
+local cell_id_ns = vim.api.nvim_create_namespace ('neobook_cell_ids')
 
 local neobook_images = {}
 
@@ -18,7 +18,7 @@ end
 
 local function render_image_at_current_line (image_path, line_number)
 
-	print (image_path)
+	-- print (image_path)
 
 	local current_buf = vim.api.nvim_get_current_buf ()
 	local current_win = vim.api.nvim_get_current_win ()
@@ -58,24 +58,36 @@ local function notecell_to_displaycell (notecell)
 	local ret = {}
 	local images_to_render = {}
 
-	local exec_count = 0
+	local exec_count = ''
 
 	if is_code_cell then
 		exec_count = (notecell.execution_count and notecell.execution_count ~= vim.NIL) and tostring (notecell.execution_count) or ''
 	end
 
-	local delimiters = get_delimiters.get_delimiters (is_code_cell, exec_count)
-
-	table.insert (ret, delimiters.upper)
-
 	if notecell.source then
-		for _, line in ipairs (notecell.source) do
-			table.insert (ret, (line:gsub ('\n$', '')))
+
+		if #notecell.source == 0 then
+			table.insert (ret, '')
+		else
+			for i, line in ipairs (notecell.source) do
+
+				local gsubbed_line, count = line:gsub ('\n$', '')
+
+				table.insert (ret, gsubbed_line)
+
+				if i == #notecell.source and count ~= 0 then
+					table.insert (ret, '')
+				end
+			end
 		end
+
+		-- table.insert (ret, '')
 	end
 
+	local output_offset = -1
+
 	if notecell.outputs and #notecell.outputs > 0 then
-		table.insert (ret, get_delimiters.output_delimiter)
+		output_offset = #ret + 1
 
 		for _, output in ipairs (notecell.outputs) do
 			if output.data and output.data['text/plain'] then
@@ -107,14 +119,6 @@ local function notecell_to_displaycell (notecell)
 
 				end
 
-				-- local viu_cmd = string.format ("echo '%s' | base64 -d | viu -b -w 60 -", b64_data)
-				--
-				-- local image_text_lines = vim.fn.systemlist (viu_cmd)
-				--
-				-- for _, img_line in ipairs (image_text_lines) do
-				-- 	table.insert (ret, img_line)
-				-- end
-
 			end
 
 			if output.name == 'stdout' and output.text then
@@ -127,9 +131,7 @@ local function notecell_to_displaycell (notecell)
 
 	end
 
-	table.insert (ret, delimiters.lower)
-
-	return ret, images_to_render
+	return ret, images_to_render, is_code_cell, output_offset, exec_count
 
 end
 
@@ -145,13 +147,14 @@ local function render_notebook ()
 	end
 
 	vim.b.notebook_json = parsed
-	local extmark_dict = {}
+	local cell_id_extmark_dict = {}
+	local delimiters_info_lis = {}
 
 	vim.api.nvim_buf_set_lines (0, 0, -1, false, {})
 
 	for _, cell in ipairs (parsed.cells) do
 
-		local displaycell, images_to_render = notecell_to_displaycell (cell)
+		local displaycell, images_to_render, is_code_cell, output_offset, exec_count = notecell_to_displaycell (cell)
 
 		local start_line = vim.api.nvim_buf_line_count (0)
 
@@ -165,19 +168,47 @@ local function render_notebook ()
 			render_image_at_current_line (img_data.path, start_line + img_data.offset - 1)
 		end
 
-		local mark_id = vim.api.nvim_buf_set_extmark (0, ns_id, start_line, 0, {})
+		local mark_id = vim.api.nvim_buf_set_extmark (0, cell_id_ns, start_line, 0, {
+			right_gravity = false
+		})
 
-		extmark_dict[mark_id] = cell.id
+		cell_id_extmark_dict[mark_id] = cell.id
+
+		table.insert (delimiters_info_lis, {
+			line_num = start_line,
+			delimiter_type = 0, -- 0: first line, 1: last line, 2: first line of output
+			is_code_cell = is_code_cell,
+			exec_count = exec_count
+		})
+
+		table.insert (delimiters_info_lis, {
+			line_num = start_line + #displaycell,
+			delimiter_type = 1,
+			is_code_cell = is_code_cell,
+			exec_count = exec_count
+		})
+
+		if output_offset ~= -1 then
+			table.insert (delimiters_info_lis, {
+				line_num = start_line + output_offset - 1,
+				delimiter_type = 2,
+				is_code_cell = is_code_cell,
+				exec_count = exec_count
+
+			})
+		end
 
 	end
 
-	vim.b.extmark_dict = extmark_dict
+	vim.b.cell_id_extmark_dict = cell_id_extmark_dict
+
+	handle_delimiters.register_delimiter_extmarks (delimiters_info_lis)
 
 	vim.api.nvim_set_option_value ('filetype', 'python', { buf = 0 })
 
 	local current_buf = vim.api.nvim_get_current_buf ()
 
-	vim.api.nvim_clear_autocmds ({group = vim.api.nvim_create_augroup ('neobook_images_' .. current_buf, {clear = true}), buffer = current_buf})
+	vim.api.nvim_clear_autocmds ({ group = vim.api.nvim_create_augroup ('neobook_images_' .. current_buf, { clear = true }), buffer = current_buf })
 
 	vim.api.nvim_create_autocmd ('BufWinEnter', {
 		group = 'neobook_images_' .. current_buf,
