@@ -85,9 +85,17 @@ local function set_current_cursor_offset (desired_cell_id, offset)
 		end
 	end
 
+	local delimiter_ladder = handle_delimiters.get_delimiter_ladder ()
+
+	local line_num = math.min (extmark_pos[1] + offset[1], delimiter_ladder[extmark_pos[1]] + 1)
+
+	local col = math.min (extmark_pos[2] + offset[2], #vim.api.nvim_buf_get_lines (0, line_num - 1, line_num, false)[1])
+
+	print (line_num, col)
+
 	vim.api.nvim_win_set_cursor (0, {
-		[1] = extmark_pos[1] + offset[1],
-		[2] = extmark_pos[2] + offset[2]
+		[1] = line_num,
+		[2] = col
 	})
 end
 
@@ -102,7 +110,7 @@ local function get_current_cell_source ()
 	return vim.api.nvim_buf_get_lines (0, upper_delimiter_line_num, end_row + 1, false)
 end
 
-local function save_and_render_outputs (cell_id, outputs)
+local function save_to_notebook_json_and_render_outputs (cell_id, outputs)
 	local current_cursor_offset = get_current_cursor_offset (cell_id)
 
 	save_notebook.save_render_buffer_sources_to_notebook_json ()
@@ -122,21 +130,36 @@ local function execute_current_cell ()
 
 	local outputs = {}
 
-	save_and_render_outputs (current_cell_id, outputs)
+	save_to_notebook_json_and_render_outputs (current_cell_id, outputs)
+
+	-- local line_lengths = ''
+
+	local curr_line = ''
 
 	local job_id = vim.fn.jobstart ({ 'python3', python_script }, {
 		stdout_buffered = false,
 		on_stdout = function (_, data, _)
+
 			for _, line in ipairs (data) do
+
+				-- line_lengths = line_lengths .. ' ' .. #line
+
 				if line ~= '' then
-					local success, decoded = pcall (vim.json.decode, line)
+					curr_line = curr_line .. line
+
+					local success, decoded = pcall (vim.json.decode, curr_line)
 
 					if success then
 						table.insert (outputs, decoded)
-						save_and_render_outputs (current_cell_id, outputs)
+						save_to_notebook_json_and_render_outputs (current_cell_id, outputs)
+						curr_line = ''
 					end
 				end
 			end
+
+			-- line_lengths = line_lengths .. '<>'
+			-- print (line_lengths)
+
 		end,
 		on_stderr = function (_, data, _)
 			for _, line in ipairs (data) do
@@ -146,7 +169,7 @@ local function execute_current_cell ()
 			end
 		end,
 		on_exit = function ()
-			save_and_render_outputs (current_cell_id, outputs)
+			save_to_notebook_json_and_render_outputs (current_cell_id, outputs)
 		end
 	})
 
