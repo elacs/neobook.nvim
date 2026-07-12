@@ -1,14 +1,12 @@
 -- imports
 local handle_delimiters = require ('neobook.handle_delimiters')
-
-local image = require ('image')
+local handle_images = require ('neobook.handle_images')
 
 
 local M = {}
 
 local cell_id_ns = vim.api.nvim_create_namespace ('neobook_cell_ids')
-
-local neobook_images = {}
+local delimiter_ns = vim.api.nvim_create_namespace ('neobook_delimiters')
 
 local function concat_tables (a, b)
 	for i = 1, #b do
@@ -16,38 +14,95 @@ local function concat_tables (a, b)
 	end
 end
 
-local function render_image_at_current_line (image_path, line_number)
+local function handle_output (output, ret, images_to_render)
+	if output.data then
+		if output.data['text/plain'] then
+			for _, out_line in ipairs (output.data['text/plain']) do
+				table.insert (ret, (out_line:gsub ('\n$', '')))
+			end
+		end
 
-	-- print (image_path)
+		if output.data['image/png'] then
+			local b64_data = output.data['image/png']
 
-	local current_buf = vim.api.nvim_get_current_buf ()
-	local current_win = vim.api.nvim_get_current_win ()
+			if type (b64_data) == 'table' then b64_data = table.concat (b64_data) end
 
-	local img = image.from_file (image_path, {
-		id = image_path,
-		window = current_win,
-		buffer = current_buf,
-		with_virtual_padding = true,
-		inline = true,
-		x = 0,
-		y = line_number
-	})
+			b64_data = b64_data:gsub ('\n', '')
 
-	if img then
-		img:render ()
+			local binary_data = vim.base64.decode (b64_data)
 
-		neobook_images[current_buf] = neobook_images[current_buf] or {}
-		table.insert (neobook_images[current_buf], img)
+			local temp_path = vim.fn.tempname () .. '.png'
+			local f = io.open (temp_path, 'wb')
+
+			if f then
+				f:write (binary_data)
+				f:close ()
+
+				table.insert (images_to_render, {
+					path = temp_path,
+					offset = #ret
+				})
+
+			end
+		end
+
 	end
 
-	vim.api.nvim_create_autocmd ({'BufDelete', 'BufWipeout'}, {
-		buffer = current_buf,
-		callback = function ()
-			neobook_images[current_buf] = nil
-			os.remove (image_path)
+	if output.name == 'stdout' and output.text then
+		for _, out_line in ipairs (output.text) do
+			table.insert (ret, (out_line:gsub ('\n$', '')))
+		end
+	end
+
+end
+
+local function handle_output_2 (output, ret, images_to_render)
+	local cases = {
+		['stream'] = function ()
+			if output.name == 'stdout' and output.text then
+				for _, out_line in ipairs (output.text) do
+					table.insert (ret, (out_line:gsub ('\n$', '')))
+				end
+			end
 		end,
-		once = true
-	})
+		['execute_result'] = function ()
+			if output.data and output.data['text/plain'] then
+				for _, out_line in ipairs (output.data['text/plain']) do
+					table.insert (ret, (out_line:gsub ('\n$', '')))
+				end
+			end
+		end,
+		['display_data'] = function ()
+			if output.data and output.data['image/png'] then
+				local b64_data = output.data['image/png']
+
+				if type (b64_data) == 'table' then b64_data = table.concat (b64_data) end
+
+				b64_data = b64_data:gsub ('\n', '')
+
+				local binary_data = vim.base64.decode (b64_data)
+
+				local temp_path = vim.fn.tempname () .. '.png'
+				local f = io.open (temp_path, 'wb')
+
+				if f then
+					f:write (binary_data)
+					f:close ()
+
+					table.insert (images_to_render, {
+						path = temp_path,
+						offset = #ret
+					})
+
+				end
+
+			end
+
+		end,
+		['error'] = function () end
+	}
+
+	cases[output.output_type] ()
 
 end
 
@@ -90,43 +145,7 @@ local function notecell_to_displaycell (notecell)
 		output_offset = #ret + 1
 
 		for _, output in ipairs (notecell.outputs) do
-			if output.data and output.data['text/plain'] then
-				for _, out_line in ipairs (output.data['text/plain']) do
-					table.insert (ret, (out_line:gsub ('\n$', '')))
-				end
-			end
-
-			if output.data and output.data['image/png'] then
-				local b64_data = output.data['image/png']
-
-				if type (b64_data) == 'table' then b64_data = table.concat (b64_data) end
-
-				b64_data = b64_data:gsub ('\n', '')
-
-				local binary_data = vim.base64.decode (b64_data)
-
-				local temp_path = vim.fn.tempname () .. '.png'
-				local f = io.open (temp_path, 'wb')
-
-				if f then
-					f:write (binary_data)
-					f:close ()
-
-					table.insert (images_to_render, {
-						path = temp_path,
-						offset = #ret
-					})
-
-				end
-
-			end
-
-			if output.name == 'stdout' and output.text then
-				for _, out_line in ipairs (output.text) do
-					table.insert (ret, (out_line:gsub ('\n$', '')))
-				end
-			end
-
+			handle_output (output, ret, images_to_render)
 		end
 
 	end
@@ -135,8 +154,7 @@ local function notecell_to_displaycell (notecell)
 
 end
 
-local function render_notebook ()
-
+local function load_file_to_notebook_json ()
 	local lines = vim.api.nvim_buf_get_lines (0, 0, -1, false)
 	local content = table.concat (lines, '\n')
 
@@ -147,12 +165,45 @@ local function render_notebook ()
 	end
 
 	vim.b.notebook_json = parsed
+
+end
+
+local function register_extmarks (cell_id_info_lis, delimiters_info_lis)
 	local cell_id_extmark_dict = {}
+
+	for _, cell_id_info in ipairs (cell_id_info_lis) do
+		local mark_id = vim.api.nvim_buf_set_extmark (0, cell_id_ns, cell_id_info.line_num, 0, {
+			right_gravity = false
+		})
+
+		cell_id_extmark_dict[mark_id] = cell_id_info.cell_id
+	end
+
+	vim.b.cell_id_extmark_dict = cell_id_extmark_dict
+
+	handle_delimiters.register_delimiter_extmarks (delimiters_info_lis)
+end
+
+local function clear_extmarks ()
+	vim.b.cell_id_extmark_dict = {}
+	vim.b.delimiter_extmark_dict = {}
+
+	vim.api.nvim_buf_clear_namespace (0, cell_id_ns, 0, -1)
+	vim.api.nvim_buf_clear_namespace (0, delimiter_ns, 0, -1)
+end
+
+local function render_notebook_from_notebook_json ()
+	handle_images.clear_images ()
+
+	local notebook_json = vim.b.notebook_json
+
+	-- local cell_id_extmark_dict = {}
+	local cell_id_info_lis = {}
 	local delimiters_info_lis = {}
 
 	vim.api.nvim_buf_set_lines (0, 0, -1, false, {})
 
-	for _, cell in ipairs (parsed.cells) do
+	for _, cell in ipairs (notebook_json.cells) do
 
 		local displaycell, images_to_render, is_code_cell, output_offset, exec_count = notecell_to_displaycell (cell)
 
@@ -165,14 +216,18 @@ local function render_notebook ()
 		vim.api.nvim_buf_set_lines (0, start_line, -1, false, displaycell)
 
 		for _, img_data in ipairs (images_to_render) do
-			render_image_at_current_line (img_data.path, start_line + img_data.offset - 1)
+			handle_images.render_image_at_current_line (img_data.path, start_line + img_data.offset - 1)
 		end
 
-		local mark_id = vim.api.nvim_buf_set_extmark (0, cell_id_ns, start_line, 0, {
-			right_gravity = false
+		-- local mark_id = vim.api.nvim_buf_set_extmark (0, cell_id_ns, start_line, 0, {
+		-- 	right_gravity = false
+		-- })
+		--
+		-- cell_id_extmark_dict[mark_id] = cell.id
+		table.insert (cell_id_info_lis, {
+			line_num = start_line,
+			cell_id = cell.id
 		})
-
-		cell_id_extmark_dict[mark_id] = cell.id
 
 		table.insert (delimiters_info_lis, {
 			line_num = start_line,
@@ -200,32 +255,29 @@ local function render_notebook ()
 
 	end
 
-	vim.b.cell_id_extmark_dict = cell_id_extmark_dict
+	-- vim.b.cell_id_extmark_dict = cell_id_extmark_dict
 
-	handle_delimiters.register_delimiter_extmarks (delimiters_info_lis)
+	-- handle_delimiters.register_delimiter_extmarks (delimiters_info_lis)
 
 	vim.api.nvim_set_option_value ('filetype', 'python', { buf = 0 })
 
-	local current_buf = vim.api.nvim_get_current_buf ()
+	handle_images.register_image_autocommands ()
 
-	vim.api.nvim_clear_autocmds ({ group = vim.api.nvim_create_augroup ('neobook_images_' .. current_buf, { clear = true }), buffer = current_buf })
+	-- return cell_id_info_lis, delimiters_info_lis
+	clear_extmarks ()
+	register_extmarks (cell_id_info_lis, delimiters_info_lis)
+end
 
-	vim.api.nvim_create_autocmd ('BufWinEnter', {
-		group = 'neobook_images_' .. current_buf,
-		buffer = current_buf,
-		callback = function ()
-			if neobook_images[current_buf] then
-				local new_win = vim.api.nvim_get_current_win ()
-				for _, img in ipairs (neobook_images[current_buf]) do
-					img.window = new_win
-					img:render ()
-				end
-			end
-		end
-	})
+local function render_notebook ()
+
+	load_file_to_notebook_json ()
+	-- local cell_id_info_lis, delimiters_info_lis = render_notebook_from_notebook_json ()
+	-- register_extmarks (cell_id_info_lis, delimiters_info_lis)
+	render_notebook_from_notebook_json ()
 end
 
 
 M.render_notebook = render_notebook
+M.render_notebook_from_notebook_json = render_notebook_from_notebook_json
 
 return M

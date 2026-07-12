@@ -6,8 +6,7 @@ local M = {}
 
 local cell_id_ns = vim.api.nvim_create_namespace ('neobook_cell_ids')
 
-local function save_notebook (filepath)
-
+local function save_render_buffer_sources_to_notebook_json ()
 	local notebook_json = vim.b.notebook_json
 	local cell_id_extmark_dict = vim.b.cell_id_extmark_dict
 
@@ -28,27 +27,45 @@ local function save_notebook (filepath)
 
 		local cell_id = cell_id_extmark_dict[mark_id]
 
-		local raw_cell_text = {}
+		local new_cell_source = {}
 		for row = start_row + 1, end_row do
 			local line = lines[row]
 
-			table.insert (raw_cell_text, line .. '\n')
+			table.insert (new_cell_source, line .. '\n')
 		end
 
 		if lines[end_row + 1] ~= '' then
-			table.insert (raw_cell_text, lines[end_row + 1])
+			table.insert (new_cell_source, lines[end_row + 1])
 		end
 
 		for _, cell in ipairs (notebook_json.cells) do
 			if cell.id == cell_id then
-				cell.source = raw_cell_text
+				cell.source = new_cell_source
 				break
 			end
 		end
 
 	end
 
-	local updated_json = vim.fn.json_encode (notebook_json)
+	vim.b.notebook_json = notebook_json
+end
+
+local function save_outputs_to_notebook_json (cell_id, outputs)
+
+	local notebook_json = vim.b.notebook_json
+
+	for _, cell in ipairs (notebook_json.cells) do
+		if cell.id == cell_id then
+			cell.outputs = outputs
+			break
+		end
+	end
+
+	vim.b.notebook_json = notebook_json
+end
+
+local function save_notebook_json_to_disk (filepath)
+	local updated_json = vim.fn.json_encode (vim.b.notebook_json)
 
 	local file = io.open (filepath, 'w')
 
@@ -60,7 +77,21 @@ local function save_notebook (filepath)
 
 end
 
+local function save_notebook (filepath)
+
+	-- local notebook_json = vim.b.notebook_json
+	-- for _, cell in ipairs (notebook_json.cells) do
+	-- 	print (#cell.outputs)
+	-- end
+
+	save_render_buffer_sources_to_notebook_json ()
+	save_notebook_json_to_disk (filepath)
+
+end
+
 
 M.save_notebook = save_notebook
+M.save_render_buffer_sources_to_notebook_json = save_render_buffer_sources_to_notebook_json
+M.save_outputs_to_notebook_json = save_outputs_to_notebook_json
 
 return M
