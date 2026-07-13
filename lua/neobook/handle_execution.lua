@@ -8,6 +8,10 @@ local M = {}
 
 local cell_id_ns = vim.api.nvim_create_namespace ('neobook_cell_ids')
 
+local curr_execution_outputs_dict = {}
+local curr_execution_cell_id_dict = {}
+local jupyter_kernel_manager_job_id_dict = {}
+
 local function get_current_cell_id ()
 	local cursor_line = vim.api.nvim_win_get_cursor (0)[1] - 1
 
@@ -91,7 +95,7 @@ local function set_current_cursor_offset (desired_cell_id, offset)
 
 	local col = math.min (extmark_pos[2] + offset[2], #vim.api.nvim_buf_get_lines (0, line_num - 1, line_num, false)[1])
 
-	print (line_num, col)
+	-- print (line_num, col)
 
 	vim.api.nvim_win_set_cursor (0, {
 		[1] = line_num,
@@ -121,60 +125,94 @@ local function save_to_notebook_json_and_render_outputs (cell_id, outputs)
 	set_current_cursor_offset (cell_id, current_cursor_offset)
 end
 
-local function execute_current_cell ()
-	local current_cell_id = get_current_cell_id ()
+local function get_jupyter_kernel_manager_job_id ()
+	local current_buf = vim.api.nvim_get_current_buf ()
 
-	local current_cell_source = get_current_cell_source ()
+	if jupyter_kernel_manager_job_id_dict[current_buf] then return jupyter_kernel_manager_job_id_dict[current_buf] end
 
-	local python_script = vim.fn.fnamemodify (debug.getinfo (1).source:sub (2), ':h') .. '/runner.py'
-
-	local outputs = {}
-
-	save_to_notebook_json_and_render_outputs (current_cell_id, outputs)
-
-	-- local line_lengths = ''
+	local python_script = vim.fn.fnamemodify (debug.getinfo (1).source:sub (2), ':h') .. '/jupyter_kernel_manager.py'
 
 	local curr_line = ''
+
+	curr_execution_cell_id_dict[current_buf] = nil
+	curr_execution_outputs_dict[current_buf] = {}
 
 	local job_id = vim.fn.jobstart ({ 'python3', python_script }, {
 		stdout_buffered = false,
 		on_stdout = function (_, data, _)
 
 			for _, line in ipairs (data) do
-
-				-- line_lengths = line_lengths .. ' ' .. #line
-
 				if line ~= '' then
-					curr_line = curr_line .. line
 
+					curr_line = curr_line .. line
 					local success, decoded = pcall (vim.json.decode, curr_line)
 
 					if success then
-						table.insert (outputs, decoded)
-						save_to_notebook_json_and_render_outputs (current_cell_id, outputs)
+
+						if decoded.output_type == 'neobook_status' and decoded.state == 'idle' then
+							if curr_execution_cell_id_dict[current_buf] then
+								save_to_notebook_json_and_render_outputs (curr_execution_cell_id_dict[current_buf], curr_execution_outputs_dict[current_buf])
+
+								curr_execution_cell_id_dict[current_buf] = nil
+								curr_execution_outputs_dict[current_buf] = {}
+							end
+						else
+							if curr_execution_cell_id_dict[current_buf] then
+								table.insert (curr_execution_outputs_dict[current_buf], decoded)
+								-- print (vim.inspect (curr_execution_outputs_dict[current_buf]))
+								save_to_notebook_json_and_render_outputs (curr_execution_cell_id_dict[current_buf], curr_execution_outputs_dict[current_buf])
+							end
+						end
+
 						curr_line = ''
+
 					end
 				end
 			end
-
-			-- line_lengths = line_lengths .. '<>'
-			-- print (line_lengths)
-
 		end,
 		on_stderr = function (_, data, _)
 			for _, line in ipairs (data) do
-				if line ~= '' then
-					vim.notify ('Python Error: ' .. line, vim.log.levels.ERROR)
-				end
+				if line~= '' then vim.notify ('Python Error: ' .. line, vim.log.levels.ERROR) end
 			end
 		end,
 		on_exit = function ()
-			save_to_notebook_json_and_render_outputs (current_cell_id, outputs)
+			jupyter_kernel_manager_job_id_dict[current_buf] = nil
+			vim.notify ('Jupyter Kernel stopped', vim.log.levels.INFO)
 		end
 	})
 
-	vim.fn.chansend (job_id, current_cell_source)
-	vim.fn.chanclose (job_id, 'stdin')
+	jupyter_kernel_manager_job_id_dict[current_buf] = job_id
+
+	vim.api.nvim_create_autocmd ({'BufDelete', 'BufWipeout'}, {
+		buffer = current_buf,
+		callback = function ()
+			if vim.b[current_buf].jupyter_kernel_manager_job_id then
+				vim.fn.jobstop (vim.b[current_buf].jupyter_kernel_manager_job_id)
+			end
+		end,
+		once = true
+	})
+
+	return job_id
+end
+
+local function execute_current_cell ()
+	local current_cell_id = get_current_cell_id ()
+	local current_cell_source = get_current_cell_source ()
+
+	local jupyter_kernel_manager_job_id = get_jupyter_kernel_manager_job_id ()
+
+	local current_buf = vim.api.nvim_get_current_buf ()
+	curr_execution_cell_id_dict[current_buf] = current_cell_id
+	curr_execution_outputs_dict[current_buf] = {}
+
+	save_to_notebook_json_and_render_outputs (current_cell_id, curr_execution_outputs_dict[current_buf])
+
+	local code_str = table.concat (current_cell_source, '\n')
+	local request = vim.fn.json_encode ({ code = code_str }) .. '\n'
+	-- print (request)
+	vim.fn.chansend (jupyter_kernel_manager_job_id, request)
+
 end
 
 

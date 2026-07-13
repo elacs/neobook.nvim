@@ -1,8 +1,9 @@
-local M = {}
-
 local image = require ('image')
 
-local master_neobook_images = {}
+
+local M = {}
+
+local neobook_images_dict = {}
 
 local function render_image_at_current_line (image_path, line_number)
 
@@ -11,7 +12,7 @@ local function render_image_at_current_line (image_path, line_number)
 	local current_buf = vim.api.nvim_get_current_buf ()
 	local current_win = vim.api.nvim_get_current_win ()
 
-	local neobook_images = master_neobook_images[current_buf] or {}
+	local neobook_images = neobook_images_dict[current_buf] or {}
 
 	local img = image.from_file (image_path, {
 		id = image_path,
@@ -32,7 +33,7 @@ local function render_image_at_current_line (image_path, line_number)
 		})
 	end
 
-	master_neobook_images[current_buf] = neobook_images
+	neobook_images_dict[current_buf] = neobook_images
 
 end
 
@@ -40,7 +41,7 @@ local function clear_images (buf_id)
 
 	buf_id = buf_id or vim.api.nvim_get_current_buf ()
 
-	local neobook_images = master_neobook_images[buf_id]
+	local neobook_images = neobook_images_dict[buf_id]
 	if not neobook_images or #neobook_images == 0 then return end
 
 	for _, img_info in ipairs (neobook_images) do
@@ -48,7 +49,7 @@ local function clear_images (buf_id)
 		os.remove (img_info.img_path)
 	end
 
-	master_neobook_images[buf_id] = {}
+	neobook_images_dict[buf_id] = {}
 end
 
 local function register_image_autocommands ()
@@ -60,7 +61,7 @@ local function register_image_autocommands ()
 		group = 'neobook_images_' .. current_buf,
 		buffer = current_buf,
 		callback = function ()
-			local neobook_images = master_neobook_images[current_buf]
+			local neobook_images = neobook_images_dict[current_buf]
 
 			if neobook_images and #neobook_images ~= 0 then
 				local new_win = vim.api.nvim_get_current_win ()
@@ -82,7 +83,6 @@ local function register_image_autocommands ()
 end
 
 
-M.master_neobook_images = master_neobook_images
 M.render_image_at_current_line = render_image_at_current_line
 M.register_image_autocommands = register_image_autocommands
 M.clear_images = clear_images
