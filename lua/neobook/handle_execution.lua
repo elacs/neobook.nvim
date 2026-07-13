@@ -186,8 +186,8 @@ local function get_jupyter_kernel_manager_job_id ()
 	vim.api.nvim_create_autocmd ({'BufDelete', 'BufWipeout'}, {
 		buffer = current_buf,
 		callback = function ()
-			if vim.b[current_buf].jupyter_kernel_manager_job_id then
-				vim.fn.jobstop (vim.b[current_buf].jupyter_kernel_manager_job_id)
+			if jupyter_kernel_manager_job_id_dict[current_buf] then
+				vim.fn.jobstop (jupyter_kernel_manager_job_id_dict[current_buf])
 			end
 		end,
 		once = true
