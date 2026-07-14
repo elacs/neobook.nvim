@@ -203,16 +203,17 @@ local function render_notebook_from_notebook_json ()
 
 	vim.api.nvim_buf_set_lines (0, 0, -1, false, {})
 
+	local start_line = 0
+
 	for _, cell in ipairs (notebook_json.cells) do
 
 		local displaycell, images_to_render, is_code_cell, output_offset, exec_count = notecell_to_displaycell (cell)
 
-		local start_line = vim.api.nvim_buf_line_count (0)
 
-		if start_line == 1 and vim.api.nvim_buf_get_lines (0, 0, 1, false) [1] == '' then
-			start_line = 0
-		end
-
+		-- if start_line == 1 and vim.api.nvim_buf_get_lines (0, 0, 1, false) [1] == '' then
+		-- 	start_line = 0
+		-- end
+		-- print (vim.inspect (displaycell))
 		vim.api.nvim_buf_set_lines (0, start_line, -1, false, displaycell)
 
 		for _, img_data in ipairs (images_to_render) do
@@ -252,6 +253,8 @@ local function render_notebook_from_notebook_json ()
 
 			})
 		end
+
+		start_line = vim.api.nvim_buf_line_count (0)
 
 	end
 

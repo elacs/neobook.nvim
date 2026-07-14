@@ -2,7 +2,7 @@
 local handle_delimiters = require ('neobook.handle_delimiters')
 local save_notebook = require ('neobook.save_notebook')
 local render_notebook = require ('neobook.render_notebook')
-
+local handle_cursor_pos = require ('neobook.handle_cursor_pos')
 
 local M = {}
 
@@ -33,6 +33,18 @@ local function get_current_cell_id ()
 	return ret
 end
 
+local function get_current_cell_type ()
+	local current_cell_id = get_current_cell_id ()
+
+	local notebook_json = vim.b.notebook_json
+
+	for _, cell in ipairs (notebook_json.cells) do
+		if cell.id == current_cell_id then
+			return cell.cell_type
+		end
+	end
+end
+
 local function get_current_upper_delimiter_line_num ()
 	local cursor_line = vim.api.nvim_win_get_cursor (0)[1] - 1
 
@@ -56,53 +68,6 @@ local function get_current_upper_delimiter_line_num ()
 
 end
 
-local function get_current_cursor_offset (desired_cell_id)
-	local current_cursor_pos = vim.api.nvim_win_get_cursor (0)
-
-	local cell_id_extmark_dict = vim.b.cell_id_extmark_dict
-
-	for extmark_id, cell_id in ipairs (cell_id_extmark_dict) do
-		if cell_id == desired_cell_id then
-			local extmark_pos = vim.api.nvim_buf_get_extmark_by_id (0, cell_id_ns, extmark_id, {})
-
-			return {
-				[1] = current_cursor_pos[1] - extmark_pos[1],
-				[2] = current_cursor_pos[2] - extmark_pos[2]
-			}
-
-		end
-	end
-
-end
-
-local function set_current_cursor_offset (desired_cell_id, offset)
-
-	local cell_id_extmark_dict = vim.b.cell_id_extmark_dict
-
-	local extmark_pos = {1, 0}
-
-	for extmark_id, cell_id in ipairs (cell_id_extmark_dict) do
-		if cell_id == desired_cell_id then
-			extmark_pos = vim.api.nvim_buf_get_extmark_by_id (0, cell_id_ns, extmark_id, {})
-
-			break
-		end
-	end
-
-	local delimiter_ladder = handle_delimiters.get_delimiter_ladder ()
-
-	local line_num = math.min (extmark_pos[1] + offset[1], delimiter_ladder[extmark_pos[1]] + 1)
-
-	local col = math.min (extmark_pos[2] + offset[2], #vim.api.nvim_buf_get_lines (0, line_num - 1, line_num, false)[1])
-
-	-- print (line_num, col)
-
-	vim.api.nvim_win_set_cursor (0, {
-		[1] = line_num,
-		[2] = col
-	})
-end
-
 local function get_current_cell_source ()
 
 	local upper_delimiter_line_num = get_current_upper_delimiter_line_num ()
@@ -115,14 +80,14 @@ local function get_current_cell_source ()
 end
 
 local function save_to_notebook_json_and_render_outputs (cell_id, outputs)
-	local current_cursor_offset = get_current_cursor_offset (cell_id)
+	local current_cursor_offset = handle_cursor_pos.get_current_cursor_offset (cell_id)
 
 	save_notebook.save_render_buffer_sources_to_notebook_json ()
 	save_notebook.save_outputs_to_notebook_json (cell_id, outputs)
 
 	render_notebook.render_notebook_from_notebook_json () -- implement a method that only renders the outputs of the cell
 
-	set_current_cursor_offset (cell_id, current_cursor_offset)
+	handle_cursor_pos.set_current_cursor_offset (cell_id, current_cursor_offset)
 end
 
 local function get_jupyter_kernel_manager_job_id ()
@@ -216,6 +181,7 @@ local function execute_current_cell ()
 end
 
 
+M.get_current_cell_id = get_current_cell_id
 M.execute_current_cell = execute_current_cell
 
 return M

@@ -2,8 +2,7 @@
 nvim plugin for rendering jupyter notebooks
 
 ## todo
-notebook_to_buf
-	- render_image
-get_delimiter_length
-buf_to_notebook
-run_cell
+- only execute code cells
+- execution errors, graphics (eg. tqdm bar etc.)
+- exporting to latex, pdf
+- rendering md?

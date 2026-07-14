@@ -53,9 +53,9 @@ local function register_delimiter_extmarks (delimiters_info_lis)
 
 	local delimiter_extmark_dict = vim.b.delimiter_extmark_dict or {}
 
-	for _, delimiter in ipairs (delimiters_info_lis) do
-	-- for i = #delimiters_info_lis, 1, -1 do
-		-- local delimiter = delimiters_info_lis[i]
+	-- for _, delimiter in ipairs (delimiters_info_lis) do
+	for i = #delimiters_info_lis, 1, -1 do
+		local delimiter = delimiters_info_lis[i]
 
 		local extmark_id = vim.api.nvim_buf_set_extmark (0, delimiter_ns, delimiter.line_num, 0, {
 			right_gravity = false
