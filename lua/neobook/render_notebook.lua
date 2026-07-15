@@ -1,62 +1,16 @@
 -- imports
 local handle_delimiters = require ('neobook.handle_delimiters')
 local handle_images = require ('neobook.handle_images')
+local utils = require ('neobook.utils')
 
 
 local M = {}
 
 local cell_id_ns = vim.api.nvim_create_namespace ('neobook_cell_ids')
 local delimiter_ns = vim.api.nvim_create_namespace ('neobook_delimiters')
+local output_highlights_ns = vim.api.nvim_create_namespace ('neobook_output_highlights')
 
-local function concat_tables (a, b)
-	for i = 1, #b do
-		a[#a + 1] = b[i]
-	end
-end
-
-local function handle_output (output, ret, images_to_render)
-	if output.data then
-		if output.data['text/plain'] then
-			for _, out_line in ipairs (output.data['text/plain']) do
-				table.insert (ret, (out_line:gsub ('\n$', '')))
-			end
-		end
-
-		if output.data['image/png'] then
-			local b64_data = output.data['image/png']
-
-			if type (b64_data) == 'table' then b64_data = table.concat (b64_data) end
-
-			b64_data = b64_data:gsub ('\n', '')
-
-			local binary_data = vim.base64.decode (b64_data)
-
-			local temp_path = vim.fn.tempname () .. '.png'
-			local f = io.open (temp_path, 'wb')
-
-			if f then
-				f:write (binary_data)
-				f:close ()
-
-				table.insert (images_to_render, {
-					path = temp_path,
-					offset = #ret
-				})
-
-			end
-		end
-
-	end
-
-	if output.name == 'stdout' and output.text then
-		for _, out_line in ipairs (output.text) do
-			table.insert (ret, (out_line:gsub ('\n$', '')))
-		end
-	end
-
-end
-
-local function handle_output_2 (output, ret, images_to_render)
+local function handle_output (output, ret, images_to_render, highlights)
 	local cases = {
 		['stream'] = function ()
 			if output.name == 'stdout' and output.text then
@@ -65,6 +19,7 @@ local function handle_output_2 (output, ret, images_to_render)
 				end
 			end
 		end,
+
 		['execute_result'] = function ()
 			if output.data and output.data['text/plain'] then
 				for _, out_line in ipairs (output.data['text/plain']) do
@@ -72,7 +27,14 @@ local function handle_output_2 (output, ret, images_to_render)
 				end
 			end
 		end,
+
 		['display_data'] = function ()
+			if output.data and output.data['text/plain'] then
+				for _, out_line in ipairs (output.data['text/plain']) do
+					table.insert (ret, (out_line:gsub ('\n$', '')))
+				end
+			end
+
 			if output.data and output.data['image/png'] then
 				local b64_data = output.data['image/png']
 
@@ -99,7 +61,30 @@ local function handle_output_2 (output, ret, images_to_render)
 			end
 
 		end,
-		['error'] = function () end
+
+		['error'] = function ()
+			local start_offset = #ret
+
+			if output.traceback then
+				for _, line in ipairs (output.traceback) do
+					local clean_line = line:gsub ('\\u001b%[[0-9;]*m', ''):gsub ('\27%[[0-9;]*m', '')
+
+					utils.concat_tables (ret, utils.split (clean_line, '\n'))
+				end
+			else
+				table.insert (ret, output.ename)
+				table.insert (ret, output.evalue)
+			end
+
+			local end_offset = #ret
+
+			table.insert (highlights, {
+				hl_group = 'ErrorMsg',
+				start_offset = start_offset,
+				end_offset = end_offset
+			})
+
+		end
 	}
 
 	cases[output.output_type] ()
@@ -112,6 +97,7 @@ local function notecell_to_displaycell (notecell)
 
 	local ret = {}
 	local images_to_render = {}
+	local highlights = {}
 
 	local exec_count = ''
 
@@ -145,12 +131,12 @@ local function notecell_to_displaycell (notecell)
 		output_offset = #ret + 1
 
 		for _, output in ipairs (notecell.outputs) do
-			handle_output (output, ret, images_to_render)
+			handle_output (output, ret, images_to_render, highlights)
 		end
 
 	end
 
-	return ret, images_to_render, is_code_cell, output_offset, exec_count
+	return ret, images_to_render, is_code_cell, output_offset, exec_count, highlights
 
 end
 
@@ -201,13 +187,15 @@ local function render_notebook_from_notebook_json ()
 	local cell_id_info_lis = {}
 	local delimiters_info_lis = {}
 
+	vim.api.nvim_buf_clear_namespace (0, output_highlights_ns, 0, -1)
+
 	vim.api.nvim_buf_set_lines (0, 0, -1, false, {})
 
 	local start_line = 0
 
 	for _, cell in ipairs (notebook_json.cells) do
 
-		local displaycell, images_to_render, is_code_cell, output_offset, exec_count = notecell_to_displaycell (cell)
+		local displaycell, images_to_render, is_code_cell, output_offset, exec_count, highlights = notecell_to_displaycell (cell)
 
 
 		-- if start_line == 1 and vim.api.nvim_buf_get_lines (0, 0, 1, false) [1] == '' then
@@ -218,6 +206,13 @@ local function render_notebook_from_notebook_json ()
 
 		for _, img_data in ipairs (images_to_render) do
 			handle_images.render_image_at_current_line (img_data.path, start_line + img_data.offset - 1)
+		end
+
+		for _, hl in ipairs (highlights) do
+-- 			for l = start_line + hl.start_offset, start_line + hl.end_offset - 1 do
+-- 				vim.hl.range (0, output_highlights_ns, hl.hl_group, {l})
+-- 			end
+			vim.hl.range (0, output_highlights_ns, hl.hl_group, {start_line + hl.start_offset, 0}, {start_line + hl.end_offset, -1})
 		end
 
 		-- local mark_id = vim.api.nvim_buf_set_extmark (0, cell_id_ns, start_line, 0, {

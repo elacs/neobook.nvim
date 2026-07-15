@@ -11,6 +11,7 @@ local cell_id_ns = vim.api.nvim_create_namespace ('neobook_cell_ids')
 local curr_execution_outputs_dict = {}
 local curr_execution_cell_id_dict = {}
 local jupyter_kernel_manager_job_id_dict = {}
+local curr_execution_count_dict = {}
 
 local function get_current_cell_id ()
 	local cursor_line = vim.api.nvim_win_get_cursor (0)[1] - 1
@@ -33,13 +34,12 @@ local function get_current_cell_id ()
 	return ret
 end
 
-local function get_current_cell_type ()
-	local current_cell_id = get_current_cell_id ()
+local function get_cell_type (cell_id)
 
 	local notebook_json = vim.b.notebook_json
 
 	for _, cell in ipairs (notebook_json.cells) do
-		if cell.id == current_cell_id then
+		if cell.id == cell_id then
 			return cell.cell_type
 		end
 	end
@@ -101,6 +101,7 @@ local function get_jupyter_kernel_manager_job_id ()
 
 	curr_execution_cell_id_dict[current_buf] = nil
 	curr_execution_outputs_dict[current_buf] = {}
+	curr_execution_count_dict[current_buf] = 0
 
 	local job_id = vim.fn.jobstart ({ 'python3', python_script }, {
 		stdout_buffered = false,
@@ -161,8 +162,28 @@ local function get_jupyter_kernel_manager_job_id ()
 	return job_id
 end
 
+local function set_cell_execution_count (cell_id, execution_count)
+	local notebook_json = vim.b.notebook_json
+
+	for _, cell in ipairs (notebook_json.cells) do
+		if cell.id == cell_id then
+			cell.execution_count = execution_count
+		end
+	end
+
+	vim.b.notebook_json = notebook_json
+
+end
+
 local function execute_current_cell ()
 	local current_cell_id = get_current_cell_id ()
+
+	local current_cell_type = get_cell_type (current_cell_id)
+	if current_cell_type ~= 'code' then
+		print ('Not a code cell')
+		return
+	end
+
 	local current_cell_source = get_current_cell_source ()
 
 	local jupyter_kernel_manager_job_id = get_jupyter_kernel_manager_job_id ()
@@ -170,7 +191,9 @@ local function execute_current_cell ()
 	local current_buf = vim.api.nvim_get_current_buf ()
 	curr_execution_cell_id_dict[current_buf] = current_cell_id
 	curr_execution_outputs_dict[current_buf] = {}
+	curr_execution_count_dict[current_buf] = curr_execution_count_dict[current_buf] + 1
 
+	set_cell_execution_count (current_cell_id, curr_execution_count_dict[current_buf])
 	save_to_notebook_json_and_render_outputs (current_cell_id, curr_execution_outputs_dict[current_buf])
 
 	local code_str = table.concat (current_cell_source, '\n')

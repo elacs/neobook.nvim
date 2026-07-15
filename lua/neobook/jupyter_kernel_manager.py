@@ -46,12 +46,19 @@ def main ():
 								'metadata': content['metadata']
 							}), flush = True)
 
+						case 'error':
+							print (json.dumps ({
+								'ename': content['ename'],
+								'evalue': content['evalue'],
+								'output_type': msg_type,
+								'traceback': content['traceback']
+							}), flush = True)
 						case 'status':
 							if content['execution_state'] == 'idle':
 								print (json.dumps ({
 										'output_type': 'neobook_status',
 										'state': 'idle'
-									}), flush = True)
+								}), flush = True)
 								break
 
 						case _:
