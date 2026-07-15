@@ -180,7 +180,7 @@ local function execute_current_cell ()
 
 	local current_cell_type = get_cell_type (current_cell_id)
 	if current_cell_type ~= 'code' then
-		print ('Not a code cell')
+		vim.notify ('Neobook Error: Not a code cell', vim.log.levels.ERROR, {})
 		return
 	end
 

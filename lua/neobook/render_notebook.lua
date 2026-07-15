@@ -10,18 +10,47 @@ local cell_id_ns = vim.api.nvim_create_namespace ('neobook_cell_ids')
 local delimiter_ns = vim.api.nvim_create_namespace ('neobook_delimiters')
 local output_highlights_ns = vim.api.nvim_create_namespace ('neobook_output_highlights')
 
-local function handle_output (output, ret, images_to_render, highlights)
+local function append_stream_line (line, ret, curr_output_type, state)
+	local clean_line = line:gsub ('\n$', '')
+
+	local parts = vim.split (clean_line, '\r')
+
+	if #parts == 1 then
+		table.insert (ret, clean_line)
+		state.prev_output_type = curr_output_type
+		return
+	end
+
+	if parts[#parts] == '' then
+		table.remove (parts)
+	end
+
+	if parts[1] == '' and state.prev_output_type == curr_output_type and #ret > 0 then
+		table.remove (ret)
+	end
+
+	if parts[#parts] ~= '' then
+		table.insert (ret, parts[#parts])
+	end
+
+	state.prev_output_type = curr_output_type
+end
+
+local function handle_output (output, ret, images_to_render, highlights, state)
 	local cases = {
 		['stream'] = function ()
-			if output.name == 'stdout' and output.text then
+			if output.name == 'stdout' and output.text and #output.text ~= 0 then
 				for _, out_line in ipairs (output.text) do
-					table.insert (ret, (out_line:gsub ('\n$', '')))
+					-- print (vim.inspect (vim.split ('', '\r')))
+					-- table.insert (ret, (out_line:gsub ('\n$', '')))
+					append_stream_line (out_line, ret, 'stdout', state)
 				end
 			elseif output.name == 'stderr' and output.text and #output.text ~= 0 then
 				local start_offset = #ret
 
 				for _, out_line in ipairs (output.text) do
-					table.insert (ret, (out_line:gsub ('\n$', '')))
+					-- table.insert (ret, (out_line:gsub ('\n$', '')))
+					append_stream_line (out_line, ret, 'stderr', state)
 				end
 
 				local end_offset = #ret
@@ -41,6 +70,8 @@ local function handle_output (output, ret, images_to_render, highlights)
 					table.insert (ret, (out_line:gsub ('\n$', '')))
 				end
 			end
+
+			state.prev_output_type = 'execute_result'
 		end,
 
 		['display_data'] = function ()
@@ -75,6 +106,7 @@ local function handle_output (output, ret, images_to_render, highlights)
 
 			end
 
+			state.prev_output_type = 'display_data'
 		end,
 
 		['error'] = function ()
@@ -84,7 +116,7 @@ local function handle_output (output, ret, images_to_render, highlights)
 				for _, line in ipairs (output.traceback) do
 					local clean_line = line:gsub ('\\u001b%[[0-9;]*m', ''):gsub ('\27%[[0-9;]*m', '')
 
-					utils.concat_tables (ret, utils.split (clean_line, '\n'))
+					utils.concat_tables (ret, vim.split (clean_line, '\n'))
 				end
 			else
 				table.insert (ret, output.ename)
@@ -99,11 +131,12 @@ local function handle_output (output, ret, images_to_render, highlights)
 				end_offset = end_offset
 			})
 
+			state.prev_output_type = 'error'
 		end
 	}
 
 	cases[output.output_type] ()
-
+	-- print (vim.inspect (ret))
 end
 
 local function notecell_to_displaycell (notecell)
@@ -145,8 +178,10 @@ local function notecell_to_displaycell (notecell)
 	if notecell.outputs and #notecell.outputs > 0 then
 		output_offset = #ret + 1
 
+		local state = { prev_output_type = nil }
+
 		for _, output in ipairs (notecell.outputs) do
-			handle_output (output, ret, images_to_render, highlights)
+			handle_output (output, ret, images_to_render, highlights, state)
 		end
 
 	end

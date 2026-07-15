@@ -5,3 +5,4 @@ nvim plugin for rendering jupyter notebooks
 - blocking execution
 - execution errors, graphics (eg. tqdm bar etc.)
 - rendering md?
+- virtual line outputs?
