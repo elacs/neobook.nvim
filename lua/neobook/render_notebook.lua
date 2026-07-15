@@ -17,6 +17,21 @@ local function handle_output (output, ret, images_to_render, highlights)
 				for _, out_line in ipairs (output.text) do
 					table.insert (ret, (out_line:gsub ('\n$', '')))
 				end
+			elseif output.name == 'stderr' and output.text and #output.text ~= 0 then
+				local start_offset = #ret
+
+				for _, out_line in ipairs (output.text) do
+					table.insert (ret, (out_line:gsub ('\n$', '')))
+				end
+
+				local end_offset = #ret
+
+				table.insert (highlights, {
+					hl_group = 'WarningMsg',
+					start_offset = start_offset,
+					end_offset = end_offset
+				})
+
 			end
 		end,
 
@@ -183,7 +198,6 @@ local function render_notebook_from_notebook_json ()
 
 	local notebook_json = vim.b.notebook_json
 
-	-- local cell_id_extmark_dict = {}
 	local cell_id_info_lis = {}
 	local delimiters_info_lis = {}
 
@@ -197,11 +211,6 @@ local function render_notebook_from_notebook_json ()
 
 		local displaycell, images_to_render, is_code_cell, output_offset, exec_count, highlights = notecell_to_displaycell (cell)
 
-
-		-- if start_line == 1 and vim.api.nvim_buf_get_lines (0, 0, 1, false) [1] == '' then
-		-- 	start_line = 0
-		-- end
-		-- print (vim.inspect (displaycell))
 		vim.api.nvim_buf_set_lines (0, start_line, -1, false, displaycell)
 
 		for _, img_data in ipairs (images_to_render) do
@@ -209,17 +218,9 @@ local function render_notebook_from_notebook_json ()
 		end
 
 		for _, hl in ipairs (highlights) do
--- 			for l = start_line + hl.start_offset, start_line + hl.end_offset - 1 do
--- 				vim.hl.range (0, output_highlights_ns, hl.hl_group, {l})
--- 			end
-			vim.hl.range (0, output_highlights_ns, hl.hl_group, {start_line + hl.start_offset, 0}, {start_line + hl.end_offset, -1})
+			vim.hl.range (0, output_highlights_ns, hl.hl_group, {start_line + hl.start_offset, 0}, {start_line + hl.end_offset - 1, -1})
 		end
 
-		-- local mark_id = vim.api.nvim_buf_set_extmark (0, cell_id_ns, start_line, 0, {
-		-- 	right_gravity = false
-		-- })
-		--
-		-- cell_id_extmark_dict[mark_id] = cell.id
 		table.insert (cell_id_info_lis, {
 			line_num = start_line,
 			cell_id = cell.id

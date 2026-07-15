@@ -42,9 +42,20 @@ def main ():
 								'data': {
 									'text/plain': [content['data']['text/plain']],
 									'image/png': content['data']['image/png']
-									},
+								},
 								'metadata': content['metadata']
 							}), flush = True)
+						
+						case 'execute_result':
+							print (json.dumps ({
+								'data': {
+									'text/plain': [content['data']['text/plain']]
+								},
+								'metadata': content['metadata'],
+								'execution_count': content['execution_count'],
+								'output_type': msg_type
+							}), flush = True)
+
 
 						case 'error':
 							print (json.dumps ({
@@ -53,6 +64,7 @@ def main ():
 								'output_type': msg_type,
 								'traceback': content['traceback']
 							}), flush = True)
+
 						case 'status':
 							if content['execution_state'] == 'idle':
 								print (json.dumps ({
