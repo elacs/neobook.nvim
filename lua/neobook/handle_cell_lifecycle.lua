@@ -44,6 +44,7 @@ local function create_new_cell (above)
 
 	local blank_cell_template = {
 		cell_type = 'code',
+		execution_count = vim.NIL,
 		id = '',
 		metadata = vim.empty_dict (),
 		outputs = {},
@@ -53,7 +54,7 @@ local function create_new_cell (above)
 	blank_cell_template.id = generate_unique_cell_id ()
 
 	local notebook_json = vim.b.notebook_json
-
+	-- print (vim.inspect (notebook_json))
 	local insert_idx = -1
 	for i, cell in ipairs (notebook_json.cells) do
 		if cell.id == current_cell_id then
@@ -132,6 +133,7 @@ local function toggle_current_cell_type ()
 			elseif cell.cell_type == 'markdown' then
 				cell.cell_type = 'code'
 				cell.outputs = {}
+				cell.execution_count = vim.NIL
 
 			end
 
