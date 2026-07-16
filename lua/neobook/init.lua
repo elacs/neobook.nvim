@@ -8,10 +8,17 @@ local handle_export = require ('neobook.handle_export')
 
 local M = {}
 
+local function attach_neobook (bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf ()
+
+	if vim.b[bufnr].neobook_attached then return end
+	vim.b[bufnr].neobook_attached = true
+
+	render_notebook.render_notebook ()
+end
+
 local function setup (opts)
 	opts = opts or {}
-
-	-- vim.api.nvim_create_user_command ('NeobookRender', render_notebook, {})
 
 	vim.api.nvim_create_autocmd ('BufReadPost', {
 		pattern = '*.ipynb',
@@ -41,8 +48,15 @@ local function setup (opts)
 	vim.api.nvim_create_user_command ('RunAll', handle_execution.execute_all_cells, {})
 
 
+	vim.api.nvim_create_autocmd ('FileType', {
+		pattern = 'ipynb',
+		callback = function (ev)
+			attach_neobook (ev.buf)
+		end
+	})
+
 	if vim.bo.filetype == 'ipynb' then
-		vim.api.nvim_exec_autocmds ('FileType', { buffer = 0 })
+		attach_neobook (vim.api.nvim_get_current_buf ())
 	end
 end
 
