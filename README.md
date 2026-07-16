@@ -1,5 +1,5 @@
 # neobook.nvim
-nvim plugin for rendering jupyter notebooks
+nvim plugin for rendering (and running) jupyter notebooks
 
 ## todo
 - more output rendering cases probably

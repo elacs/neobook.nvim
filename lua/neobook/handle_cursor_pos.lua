@@ -75,7 +75,16 @@ local function get_current_cursor_position ()
 end
 
 local function set_current_cursor_position (pos)
-	vim.api.nvim_win_set_cursor (0, pos)
+	local max_line_num = vim.api.nvim_buf_line_count (0)
+
+	local line_num = math.min (pos[1], max_line_num)
+
+	local col = math.min (pos[2], #vim.api.nvim_buf_get_lines (0, line_num - 1, line_num, false)[1])
+
+	vim.api.nvim_win_set_cursor (0, {
+		[1] = line_num,
+		[2] = col
+	})
 end
 
 

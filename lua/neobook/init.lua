@@ -37,6 +37,8 @@ local function setup (opts)
 	vim.api.nvim_create_user_command ('ExportPdf', function () handle_export.save_and_export_notebook ('pdf') end, {})
 	vim.api.nvim_create_user_command ('ExportLatex', function () handle_export.save_and_export_notebook ('latex') end, {})
 
+	vim.api.nvim_create_user_command ('KillKernel', handle_execution.kill_jupyter_kernel, {})
+	vim.api.nvim_create_user_command ('RunAll', handle_execution.execute_all_cells, {})
 
 end
 
