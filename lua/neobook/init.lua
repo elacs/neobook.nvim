@@ -40,6 +40,10 @@ local function setup (opts)
 	vim.api.nvim_create_user_command ('KillKernel', handle_execution.kill_jupyter_kernel, {})
 	vim.api.nvim_create_user_command ('RunAll', handle_execution.execute_all_cells, {})
 
+
+	if vim.bo.filetype == 'ipynb' then
+		vim.api.nvim_exec_autocmds ('FileType', { buffer = 0 })
+	end
 end
 
 
