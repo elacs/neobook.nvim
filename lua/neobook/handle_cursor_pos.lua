@@ -70,9 +70,19 @@ local function set_cursor_at_cell (desired_cell_id)
 
 end
 
+local function get_current_cursor_position ()
+	return vim.api.nvim_win_get_cursor (0)
+end
+
+local function set_current_cursor_position (pos)
+	vim.api.nvim_win_set_cursor (0, pos)
+end
+
 
 M.get_current_cursor_offset = get_current_cursor_offset
 M.set_current_cursor_offset = set_current_cursor_offset
 M.set_cursor_at_cell = set_cursor_at_cell
+M.get_current_cursor_position = get_current_cursor_position
+M.set_current_cursor_position = set_current_cursor_position
 
 return M

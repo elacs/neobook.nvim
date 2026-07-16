@@ -21,15 +21,15 @@ local function append_stream_line (line, ret, curr_output_type, state)
 		return
 	end
 
-	if parts[#parts] == '' then
-		table.remove (parts)
-	end
-
 	if parts[1] == '' and state.prev_output_type == curr_output_type and #ret > 0 then
 		table.remove (ret)
 	end
 
-	if parts[#parts] ~= '' then
+	while #parts > 0 and parts[#parts] == '' do
+		table.remove (parts)
+	end
+
+	if #parts > 0 then
 		table.insert (ret, parts[#parts])
 	end
 
@@ -150,7 +150,16 @@ local function notecell_to_displaycell (notecell)
 	local exec_count = ''
 
 	if is_code_cell then
-		exec_count = (notecell.execution_count and notecell.execution_count ~= vim.NIL) and tostring (notecell.execution_count) or ''
+		-- exec_count = (notecell.execution_count and notecell.execution_count ~= vim.NIL) and tostring (notecell.execution_count) or ''
+
+		if notecell.execution_count and notecell.execution_count ~= vim.NIL then
+			if notecell.execution_count == -1 then
+				exec_count = '?'
+			else
+				exec_count = tostring (notecell.execution_count)
+			end
+		end
+
 	end
 
 	if notecell.source then

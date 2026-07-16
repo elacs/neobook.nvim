@@ -2,7 +2,6 @@
 nvim plugin for rendering jupyter notebooks
 
 ## todo
-- blocking execution
-- execution errors, graphics (eg. tqdm bar etc.)
+- more output rendering cases probably
 - rendering md?
 - virtual line outputs?
