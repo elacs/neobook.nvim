@@ -2,28 +2,12 @@
 local handle_execution = require ('neobook.handle_execution')
 local render_notebook = require ('neobook.render_notebook')
 local handle_cursor_pos = require ('neobook.handle_cursor_pos')
-
+local utils = require ('neobook.utils')
 
 local M = {}
 
 local function generate_unique_cell_id ()
-	local cell_id_format = {8, 4, 4, 4, 12}
-	local chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-
-	local parts = {}
-
-	for _, l in ipairs (cell_id_format) do
-		local part = ''
-
-		for _ = 1, l do
-			local rand_idx = math.random (1, #chars)
-			part = part .. chars:sub (rand_idx, rand_idx)
-		end
-
-		table.insert (parts, part)
-	end
-
-	local ret = table.concat (parts, '-')
+	local ret = utils.generate_cell_id ()
 
 	local notebook_json = vim.b.notebook_json
 
@@ -34,6 +18,7 @@ local function generate_unique_cell_id ()
 	end
 
 	return ret
+
 end
 
 local function create_new_cell (above)

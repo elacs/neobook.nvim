@@ -4,6 +4,7 @@ local save_notebook = require ('neobook.save_notebook')
 local handle_execution = require ('neobook.handle_execution')
 local handle_cell_lifecycle = require ('neobook.handle_cell_lifecycle')
 local handle_export = require ('neobook.handle_export')
+local initialize_notebook = require ('neobook.initialize_notebook')
 
 
 local M = {}
@@ -46,7 +47,7 @@ local function setup (opts)
 
 	vim.api.nvim_create_user_command ('KillKernel', handle_execution.kill_jupyter_kernel, {})
 	vim.api.nvim_create_user_command ('RunAll', handle_execution.execute_all_cells, {})
-
+	-- vim.api.nvim_create_user_command ('InitializeNotebook', initialize_notebook.initialize_notebook, {})
 
 	vim.api.nvim_create_autocmd ('FileType', {
 		pattern = 'ipynb',

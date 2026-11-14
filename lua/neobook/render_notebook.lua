@@ -2,6 +2,7 @@
 local handle_delimiters = require ('neobook.handle_delimiters')
 local handle_images = require ('neobook.handle_images')
 local utils = require ('neobook.utils')
+local initialize_notebook = require ('neobook.initialize_notebook')
 
 
 local M = {}
@@ -314,8 +315,11 @@ end
 local function render_notebook ()
 
 	load_file_to_notebook_json ()
-	-- local cell_id_info_lis, delimiters_info_lis = render_notebook_from_notebook_json ()
-	-- register_extmarks (cell_id_info_lis, delimiters_info_lis)
+
+	if not vim.b.notebook_json then
+		initialize_notebook.initialize_notebook ()
+	end
+
 	render_notebook_from_notebook_json ()
 end
 
